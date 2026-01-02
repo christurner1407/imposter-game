@@ -7,9 +7,11 @@ const rateLimit = require("express-rate-limit");
 const app = express();
 const server = http.createServer(app);
 
+// Trust proxy (required for Cloudflare/nginx)
+app.set("trust proxy", true);
+
 // Configuration from environment variables
 const PORT = process.env.PORT || 3000;
-const TRUST_PROXY = process.env.TRUST_PROXY === "true";
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
     .split(",")
     .map(function(s) { return s.trim(); })
@@ -17,7 +19,11 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
 
 // Add localhost defaults for development
 if (ALLOWED_ORIGINS.length === 0) {
-    ALLOWED_ORIGINS.push("http://localhost:3000", "http://127.0.0.1:3000");
+    ALLOWED_ORIGINS.push(
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "https://impostor.bigboychris.com"
+    );
 }
 
 // Resource limits from environment or defaults
@@ -52,11 +58,6 @@ const EVENT_RATE_LIMITS = {
     submitCustomWords: { max: 20, windowMs: 60000 }
 };
 
-// Trust proxy if behind nginx/cloudflare
-if (TRUST_PROXY) {
-    app.set("trust proxy", 1);
-}
-
 // HTTP Security hardening
 app.disable("x-powered-by");
 app.use(helmet({
@@ -87,21 +88,22 @@ app.get("/healthz", function(req, res) {
 
 app.use(express.static("public"));
 
-// Socket.IO with CORS restrictions
+// Socket.IO with CORS restrictions (Cloudflare compatible)
 const io = new Server(server, {
     cors: {
         origin: function(origin, callback) {
-            // Allow requests with no origin (like mobile apps or curl)
-            if (!origin) return callback(null, true);
-            if (ALLOWED_ORIGINS.indexOf(origin) !== -1) {
+            // Allow requests with no origin (mobile apps, curl, same-origin)
+            if (!origin || ALLOWED_ORIGINS.indexOf(origin) !== -1) {
                 callback(null, true);
             } else {
                 console.log("Blocked origin:", origin);
                 callback(new Error("Not allowed by CORS"));
             }
         },
-        methods: ["GET", "POST"]
-    }
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    transports: ["websocket", "polling"]
 });
 
 // In-memory rooms storage

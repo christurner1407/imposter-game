@@ -23,7 +23,7 @@ function getStoredSession() {
 
 // Store session info for reconnect
 function storeSession(roomCode, playerName) {
-    localStorage.setItem("imposterSession", JSON.stringify({ roomCode, playerName }));
+    localStorage.setItem("imposterSession", JSON.stringify({ roomCode: roomCode, playerName: playerName }));
 }
 
 // Clear stored session
@@ -32,7 +32,12 @@ function clearSession() {
 }
 
 const persistentPlayerId = getPlayerId();
-const socket = io();
+
+// Socket.IO connection with Cloudflare-compatible settings
+const socket = io({
+    transports: ["websocket"],
+    secure: true
+});
 
 const lobbyDiv = document.getElementById("lobby");
 const roomDiv = document.getElementById("room");
