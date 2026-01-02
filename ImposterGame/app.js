@@ -645,7 +645,8 @@ io.on("connection", function(socket) {
             category: category,
             word: word,
             eliminated: player.eliminated,
-            pendingGuess: room.pendingImpostorGuess && room.eliminatedImpostorId === playerId
+            pendingGuess: room.pendingImpostorGuess && room.eliminatedImpostorId === playerId,
+            turnOrder: room.turnOrder || null
         });
 
         socket.emit("playerList", room.players);
@@ -964,19 +965,26 @@ io.on("connection", function(socket) {
         room.eliminatedImpostorId = null;
         touchRoom(code);
 
-        const shuffledPlayers = shuffleArray(room.players);
+        // Shuffle players for role assignment
+        const shuffledForRoles = shuffleArray(room.players);
         
         room.players.forEach(function(player) {
             player.eliminated = false;
         });
 
-        shuffledPlayers.forEach(function(player, index) {
+        shuffledForRoles.forEach(function(player, index) {
             if (index < impostorCount) {
                 room.roles[player.id] = "impostor";
             } else {
                 room.roles[player.id] = "crew";
             }
         });
+
+        // Create randomized turn order (separate from role assignment)
+        const turnOrder = shuffleArray(room.players).map(function(player) {
+            return { id: player.id, name: player.name };
+        });
+        room.turnOrder = turnOrder;
 
         room.players.forEach(function(player) {
             const role = room.roles[player.id];
@@ -994,6 +1002,7 @@ io.on("connection", function(socket) {
         });
 
         io.to(code).emit("gameStarted");
+        io.to(code).emit("turnOrder", turnOrder);
         setPhase(code, "discussion");
         
         console.log("Game started in session " + code + " - Category: " + categoryName + ", Word: " + room.secretWord + ", Impostors: " + impostorCount);

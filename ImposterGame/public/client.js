@@ -123,6 +123,8 @@ let isEliminated = false;
 let currentMode = "preset";
 let gameEnded = false;
 let guessTimerInterval = null;
+let currentTurnOrder = [];
+let myRole = null;
 
 // Try to reconnect on page load
 socket.on("connect", function() {
@@ -312,12 +314,18 @@ function renderVoteButtons() {
     votePlayerList.innerHTML = "";
     selectedVote = null;
     
-    currentPlayers.forEach(function(player) {
+    // Create a shuffled copy of players for voting display to prevent order-based inference
+    const shuffledPlayers = currentPlayers.slice().sort(function() { return Math.random() - 0.5; });
+    
+    shuffledPlayers.forEach(function(player) {
         if (player.eliminated) return;
         
         const btn = document.createElement("button");
         btn.className = "w-full py-4 bg-gray-700 hover:bg-gray-600 active:bg-gray-500 text-white font-medium rounded-xl transition-colors text-left px-4 flex items-center justify-between touch-target";
-        btn.innerHTML = '<span>' + player.name + (player.isHost ? ' <span class="text-purple-400 text-sm">(Host)</span>' : '') + '</span><span class="vote-check hidden text-green-400 text-sm font-bold">VOTED</span>';
+        
+        // Use consistent styling for all players - no special indicators
+        const displayName = player.name + (player.isHost ? ' (Host)' : '');
+        btn.innerHTML = '<span class="text-white">' + displayName + '</span><span class="vote-check hidden text-green-400 text-sm font-bold">VOTED</span>';
         btn.dataset.playerId = player.id;
         
         if (isEliminated) {
@@ -443,6 +451,7 @@ function updateGamePlayerList() {
         const li = document.createElement("li");
         li.className = "flex items-center justify-between bg-gray-700 rounded-xl px-4 py-3";
         
+        // Consistent styling for all players - no role indicators
         if (player.eliminated) {
             li.classList.add("opacity-50");
             li.innerHTML = '<span class="text-gray-400 line-through">' + player.name + (player.isHost ? ' <span class="text-purple-400 text-sm">(Host)</span>' : '') + '</span><span class="text-red-400 text-xs font-bold uppercase">Out</span>';
@@ -534,6 +543,8 @@ socket.on("reconnectSuccess", function(data) {
         showGameScreen(data.roomCode);
         
         categoryInfo.textContent = "Category: " + data.category;
+        myRole = data.role;
+        
         if (data.role === "impostor") {
             roleCard.className = "rounded-xl p-4 sm:p-6 text-center bg-red-600";
             roleDisplay.textContent = "You are the IMPOSTOR";
@@ -545,6 +556,12 @@ socket.on("reconnectSuccess", function(data) {
             roleDisplay.textContent = "You are CREW";
             wordDisplay.textContent = data.word || "";
             roleHint.classList.add("hidden");
+        }
+        
+        // Restore turn order if available
+        if (data.turnOrder) {
+            currentTurnOrder = data.turnOrder;
+            renderTurnOrder();
         }
         
         updatePhaseUI(data.phase);
@@ -633,10 +650,31 @@ socket.on("playerList", function(players) {
     }
 });
 
+socket.on("turnOrder", function(order) {
+    currentTurnOrder = order;
+    renderTurnOrder();
+});
+
+// Render turn order display
+function renderTurnOrder() {
+    const turnOrderList = document.getElementById("turnOrderList");
+    if (!turnOrderList || currentTurnOrder.length === 0) return;
+    
+    turnOrderList.innerHTML = "";
+    currentTurnOrder.forEach(function(player, index) {
+        const li = document.createElement("li");
+        li.className = "flex items-center gap-2 text-white text-sm";
+        const isMe = player.id === myPlayerId;
+        li.innerHTML = '<span class="text-purple-400 font-bold w-5">' + (index + 1) + '.</span><span class="' + (isMe ? 'text-yellow-400 font-medium' : 'text-white') + '">' + player.name + (isMe ? ' (You)' : '') + '</span>';
+        turnOrderList.appendChild(li);
+    });
+}
+
 socket.on("gameStarted", function() {
     showGameScreen(currentRoomCode);
     isEliminated = false;
     gameEnded = false;
+    myRole = null;
     updateGamePlayerList();
 });
 
@@ -759,6 +797,8 @@ socket.on("gameReset", function() {
     
     gameEnded = false;
     isEliminated = false;
+    myRole = null;
+    currentTurnOrder = [];
     
     // Reset the play again button
     playAgainBtn.disabled = false;
@@ -790,6 +830,7 @@ socket.on("gameReset", function() {
 
 socket.on("roleAssigned", function(data) {
     categoryInfo.textContent = "Category: " + data.category;
+    myRole = data.role;
     
     if (data.role === "impostor") {
         roleCard.className = "rounded-xl p-4 sm:p-6 text-center bg-red-600";
