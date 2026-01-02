@@ -1127,7 +1127,7 @@ io.on("connection", function(socket) {
 server.listen(PORT, "0.0.0.0", function() {
     console.log("Server running on port " + PORT);
     console.log("Environment: " + (process.env.NODE_ENV || "development"));
-    console.log("Trust proxy: " + TRUST_PROXY);
+    console.log("Trust proxy: enabled");
     console.log("Allowed origins: " + JSON.stringify(ALLOWED_ORIGINS));
     console.log("Max rooms: " + MAX_ROOMS);
     console.log("Max players per room: " + MAX_PLAYERS_PER_ROOM);
