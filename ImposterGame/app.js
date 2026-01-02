@@ -7,16 +7,23 @@ const rateLimit = require("express-rate-limit");
 const app = express();
 const server = http.createServer(app);
 
-// Configuration
+// Configuration from environment variables
 const PORT = process.env.PORT || 3000;
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS 
-    ? process.env.ALLOWED_ORIGINS.split(",") 
-    : ["http://localhost:3000", "http://127.0.0.1:3000"];
+const TRUST_PROXY = process.env.TRUST_PROXY === "true";
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map(function(s) { return s.trim(); })
+    .filter(Boolean);
 
-// Resource limits
-const MAX_ROOMS = 100;
-const MAX_PLAYERS_PER_ROOM = 20;
-const ROOM_INACTIVE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+// Add localhost defaults for development
+if (ALLOWED_ORIGINS.length === 0) {
+    ALLOWED_ORIGINS.push("http://localhost:3000", "http://127.0.0.1:3000");
+}
+
+// Resource limits from environment or defaults
+const MAX_ROOMS = parseInt(process.env.MAX_ROOMS, 10) || 100;
+const MAX_PLAYERS_PER_ROOM = parseInt(process.env.MAX_PLAYERS_PER_ROOM, 10) || 20;
+const ROOM_INACTIVE_TIMEOUT = (parseInt(process.env.ROOM_TIMEOUT_MINUTES, 10) || 30) * 60 * 1000;
 const MIN_CUSTOM_WORDS = 5;
 const MAX_WORD_LENGTH = 30;
 const MIN_IMPOSTORS = 1;
@@ -45,6 +52,11 @@ const EVENT_RATE_LIMITS = {
     submitCustomWords: { max: 20, windowMs: 60000 }
 };
 
+// Trust proxy if behind nginx/cloudflare
+if (TRUST_PROXY) {
+    app.set("trust proxy", 1);
+}
+
 // HTTP Security hardening
 app.disable("x-powered-by");
 app.use(helmet({
@@ -60,13 +72,18 @@ app.use(helmet({
 
 // HTTP rate limiting
 const httpLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
+    windowMs: 15 * 60 * 1000,
+    max: 100,
     message: "Too many requests, please try again later.",
     standardHeaders: true,
     legacyHeaders: false
 });
 app.use(httpLimiter);
+
+// Health check endpoint for monitoring and reverse proxies
+app.get("/healthz", function(req, res) {
+    res.status(200).send("ok");
+});
 
 app.use(express.static("public"));
 
@@ -1104,10 +1121,13 @@ io.on("connection", function(socket) {
     });
 });
 
-server.listen(PORT, function() {
-    console.log("Server running on http://localhost:" + PORT);
-    console.log("Allowed origins:", ALLOWED_ORIGINS);
-    console.log("Max rooms:", MAX_ROOMS);
-    console.log("Max players per room:", MAX_PLAYERS_PER_ROOM);
-    console.log("Room timeout:", ROOM_INACTIVE_TIMEOUT / 1000 / 60, "minutes");
+// Bind to all interfaces (0.0.0.0) for production
+server.listen(PORT, "0.0.0.0", function() {
+    console.log("Server running on port " + PORT);
+    console.log("Environment: " + (process.env.NODE_ENV || "development"));
+    console.log("Trust proxy: " + TRUST_PROXY);
+    console.log("Allowed origins: " + JSON.stringify(ALLOWED_ORIGINS));
+    console.log("Max rooms: " + MAX_ROOMS);
+    console.log("Max players per room: " + MAX_PLAYERS_PER_ROOM);
+    console.log("Room timeout: " + (ROOM_INACTIVE_TIMEOUT / 1000 / 60) + " minutes");
 });
