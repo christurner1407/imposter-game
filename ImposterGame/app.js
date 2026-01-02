@@ -89,21 +89,25 @@ app.get("/healthz", function(req, res) {
 app.use(express.static("public"));
 
 // Socket.IO with CORS restrictions (Cloudflare compatible)
+const allowedOrigins = new Set([
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://impostor.bigboychris.com"
+]);
+
 const io = new Server(server, {
     cors: {
         origin: function(origin, callback) {
-            // Allow requests with no origin (mobile apps, curl, same-origin)
-            if (!origin || ALLOWED_ORIGINS.indexOf(origin) !== -1) {
-                callback(null, true);
-            } else {
-                console.log("Blocked origin:", origin);
-                callback(new Error("Not allowed by CORS"));
+            if (!origin || allowedOrigins.has(origin)) {
+                return callback(null, true);
             }
+            console.warn("Blocked origin:", origin);
+            return callback(null, false); // Safely reject without throwing
         },
         methods: ["GET", "POST"],
         credentials: true
     },
-    transports: ["websocket", "polling"]
+    transports: ["websocket"]
 });
 
 // In-memory rooms storage
