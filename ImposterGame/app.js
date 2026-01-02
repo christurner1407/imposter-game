@@ -114,11 +114,100 @@ const socketRateLimits = new Map();
 
 // Server-side categories with word lists
 const categories = {
-    "Animals": ["Dog", "Cat", "Elephant", "Giraffe", "Penguin", "Tiger", "Dolphin", "Eagle"],
-    "Foods": ["Pizza", "Sushi", "Burger", "Taco", "Pasta", "Ice Cream", "Steak", "Salad"],
-    "Countries": ["France", "Japan", "Brazil", "Australia", "Canada", "Egypt", "Germany", "Mexico"],
-    "Sports": ["Soccer", "Basketball", "Tennis", "Swimming", "Golf", "Hockey", "Baseball", "Boxing"],
-    "Movies": ["Titanic", "Avatar", "Inception", "Frozen", "Jaws", "Rocky", "Gladiator", "Shrek"]
+    "Animals": [
+        "Dog", "Cat", "Elephant", "Giraffe", "Penguin", "Tiger", "Dolphin", "Eagle",
+        "Lion", "Bear", "Wolf", "Fox", "Rabbit", "Deer", "Horse", "Cow", "Pig", "Sheep",
+        "Goat", "Chicken", "Duck", "Turkey", "Owl", "Hawk", "Parrot", "Flamingo",
+        "Peacock", "Swan", "Pelican", "Seagull", "Crow", "Sparrow", "Robin", "Cardinal",
+        "Whale", "Shark", "Octopus", "Jellyfish", "Starfish", "Crab", "Lobster", "Shrimp",
+        "Turtle", "Crocodile", "Alligator", "Snake", "Lizard", "Frog", "Toad", "Salamander",
+        "Butterfly", "Bee", "Ant", "Spider", "Scorpion", "Beetle", "Dragonfly", "Grasshopper",
+        "Monkey", "Gorilla", "Chimpanzee", "Orangutan", "Koala", "Kangaroo", "Platypus",
+        "Panda", "Polar Bear", "Grizzly Bear", "Moose", "Elk", "Bison", "Buffalo",
+        "Zebra", "Hippopotamus", "Rhinoceros", "Camel", "Llama", "Alpaca", "Sloth",
+        "Armadillo", "Porcupine", "Hedgehog", "Raccoon", "Skunk", "Badger", "Otter",
+        "Beaver", "Squirrel", "Chipmunk", "Hamster", "Guinea Pig", "Ferret", "Mole"
+    ],
+    "Foods": [
+        "Pizza", "Sushi", "Burger", "Taco", "Pasta", "Ice Cream", "Steak", "Salad",
+        "Sandwich", "Hotdog", "Burrito", "Nachos", "Quesadilla", "Enchilada", "Fajita",
+        "Ramen", "Pho", "Curry", "Fried Rice", "Noodles", "Dumplings", "Spring Roll",
+        "Pancakes", "Waffles", "French Toast", "Omelette", "Bacon", "Sausage", "Cereal",
+        "Soup", "Chili", "Stew", "Lasagna", "Ravioli", "Gnocchi", "Risotto", "Paella",
+        "Fish and Chips", "Lobster Roll", "Crab Cakes", "Shrimp Scampi", "Calamari",
+        "Fried Chicken", "Roast Chicken", "Turkey", "Ribs", "Brisket", "Pulled Pork",
+        "Meatloaf", "Meatballs", "Gyro", "Kebab", "Shawarma", "Falafel", "Hummus",
+        "Guacamole", "Salsa", "Chips", "Popcorn", "Pretzel", "Crackers", "Cheese",
+        "Bread", "Bagel", "Croissant", "Muffin", "Donut", "Cookie", "Brownie", "Cake",
+        "Pie", "Cheesecake", "Pudding", "Jello", "Yogurt", "Smoothie", "Milkshake",
+        "Apple", "Banana", "Orange", "Grape", "Strawberry", "Blueberry", "Watermelon",
+        "Pineapple", "Mango", "Peach", "Pear", "Cherry", "Lemon", "Lime", "Coconut"
+    ],
+    "Countries": [
+        "France", "Japan", "Brazil", "Australia", "Canada", "Egypt", "Germany", "Mexico",
+        "Italy", "Spain", "Portugal", "Greece", "Turkey", "Russia", "China", "India",
+        "Thailand", "Vietnam", "Indonesia", "Philippines", "South Korea", "Singapore",
+        "United Kingdom", "Ireland", "Scotland", "Netherlands", "Belgium", "Switzerland",
+        "Austria", "Poland", "Sweden", "Norway", "Denmark", "Finland", "Iceland",
+        "Argentina", "Chile", "Peru", "Colombia", "Venezuela", "Ecuador", "Bolivia",
+        "South Africa", "Kenya", "Nigeria", "Morocco", "Tanzania", "Ethiopia", "Ghana",
+        "New Zealand", "Fiji", "Hawaii", "Jamaica", "Cuba", "Dominican Republic",
+        "Saudi Arabia", "Israel", "Jordan", "Lebanon", "Iran", "Iraq", "Pakistan",
+        "Bangladesh", "Nepal", "Sri Lanka", "Malaysia", "Myanmar", "Cambodia", "Laos",
+        "Mongolia", "Kazakhstan", "Uzbekistan", "Ukraine", "Czech Republic", "Hungary",
+        "Romania", "Bulgaria", "Croatia", "Serbia", "Slovenia", "Slovakia", "Lithuania"
+    ],
+    "Sports": [
+        "Soccer", "Basketball", "Tennis", "Swimming", "Golf", "Hockey", "Baseball", "Boxing",
+        "Football", "Rugby", "Cricket", "Volleyball", "Badminton", "Table Tennis", "Squash",
+        "Wrestling", "Judo", "Karate", "Taekwondo", "Fencing", "Archery", "Shooting",
+        "Gymnastics", "Diving", "Surfing", "Skateboarding", "Snowboarding", "Skiing",
+        "Ice Skating", "Figure Skating", "Bobsled", "Curling", "Luge", "Biathlon",
+        "Track and Field", "Marathon", "Sprinting", "Long Jump", "High Jump", "Pole Vault",
+        "Discus", "Javelin", "Shot Put", "Hammer Throw", "Decathlon", "Triathlon",
+        "Cycling", "Mountain Biking", "BMX", "Motocross", "NASCAR", "Formula One",
+        "Horse Racing", "Polo", "Rodeo", "Bull Riding", "Fishing", "Hunting",
+        "Rock Climbing", "Bouldering", "Hiking", "Kayaking", "Canoeing", "Rowing",
+        "Water Polo", "Synchronized Swimming", "Sailing", "Windsurfing", "Kiteboarding",
+        "Lacrosse", "Field Hockey", "Handball", "Racquetball", "Pickleball", "Darts",
+        "Bowling", "Billiards", "Snooker", "Chess", "Poker", "Esports", "Paintball"
+    ],
+    "Movies": [
+        "Titanic", "Avatar", "Inception", "Frozen", "Jaws", "Rocky", "Gladiator", "Shrek",
+        "Star Wars", "Harry Potter", "Lord of the Rings", "The Matrix", "Jurassic Park",
+        "The Godfather", "Pulp Fiction", "Forrest Gump", "The Shawshank Redemption",
+        "Fight Club", "The Dark Knight", "Interstellar", "The Prestige", "Memento",
+        "Toy Story", "Finding Nemo", "The Lion King", "Aladdin", "Beauty and the Beast",
+        "Mulan", "Moana", "Coco", "Up", "Wall-E", "Ratatouille", "The Incredibles",
+        "Spider-Man", "Iron Man", "Captain America", "Thor", "Black Panther", "Avengers",
+        "Guardians of the Galaxy", "Deadpool", "X-Men", "Wolverine", "Hulk", "Ant-Man",
+        "Batman", "Superman", "Wonder Woman", "Aquaman", "Flash", "Justice League",
+        "James Bond", "Mission Impossible", "Fast and Furious", "John Wick", "Die Hard",
+        "Terminator", "Alien", "Predator", "Robocop", "Total Recall", "Blade Runner",
+        "Back to the Future", "E.T.", "Close Encounters", "Indiana Jones", "Ghostbusters",
+        "Grease", "Dirty Dancing", "Footloose", "Top Gun", "Ferris Bueller", "Breakfast Club",
+        "Home Alone", "Mrs Doubtfire", "Ace Ventura", "The Mask", "Dumb and Dumber",
+        "Scary Movie", "Scream", "Halloween", "Friday the 13th", "Nightmare on Elm Street"
+    ],
+    "Objects": [
+        "Chair", "Table", "Lamp", "Sofa", "Bed", "Desk", "Bookshelf", "Mirror",
+        "Clock", "Watch", "Phone", "Laptop", "Keyboard", "Mouse", "Monitor", "Television",
+        "Remote Control", "Camera", "Headphones", "Speaker", "Microphone", "Radio",
+        "Refrigerator", "Microwave", "Oven", "Toaster", "Blender", "Coffee Maker",
+        "Dishwasher", "Washing Machine", "Dryer", "Vacuum Cleaner", "Iron", "Fan",
+        "Air Conditioner", "Heater", "Thermostat", "Smoke Detector", "Fire Extinguisher",
+        "Umbrella", "Backpack", "Suitcase", "Wallet", "Purse", "Briefcase", "Luggage",
+        "Glasses", "Sunglasses", "Contact Lens", "Binoculars", "Telescope", "Microscope",
+        "Hammer", "Screwdriver", "Wrench", "Pliers", "Drill", "Saw", "Tape Measure",
+        "Flashlight", "Battery", "Extension Cord", "Light Bulb", "Candle", "Lighter",
+        "Key", "Lock", "Doorbell", "Doorknob", "Window", "Curtain", "Blinds",
+        "Pillow", "Blanket", "Mattress", "Sheet", "Towel", "Rug", "Carpet",
+        "Vase", "Plant Pot", "Picture Frame", "Painting", "Sculpture", "Trophy",
+        "Pen", "Pencil", "Marker", "Eraser", "Ruler", "Scissors", "Stapler",
+        "Envelope", "Stamp", "Calculator", "Calendar", "Notebook", "Folder", "Binder",
+        "Toothbrush", "Toothpaste", "Soap", "Shampoo", "Razor", "Comb", "Hairbrush",
+        "Bottle", "Cup", "Mug", "Glass", "Plate", "Bowl", "Fork", "Knife", "Spoon"
+    ]
 };
 
 // ============ UTILITY FUNCTIONS ============
