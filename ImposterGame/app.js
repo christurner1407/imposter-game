@@ -88,23 +88,16 @@ app.get("/healthz", function(req, res) {
 
 app.use(express.static("public"));
 
-// Socket.IO with CORS restrictions (Cloudflare compatible)
-const allowedOrigins = new Set([
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://impostor.bigboychris.com"
-]);
-
+// Socket.IO with CORS restrictions (Cloudflare compatible - WebSocket only)
 const io = new Server(server, {
     cors: {
         origin: function(origin, callback) {
-            if (!origin || allowedOrigins.has(origin)) {
-                return callback(null, true);
-            }
+            if (!origin) return callback(null, true);
+            if (origin === "https://impostor.bigboychris.com") return callback(null, true);
+            if (origin.startsWith("http://localhost")) return callback(null, true);
             console.warn("Blocked origin:", origin);
-            return callback(null, false); // Safely reject without throwing
+            return callback(null, false);
         },
-        methods: ["GET", "POST"],
         credentials: true
     },
     transports: ["websocket"]

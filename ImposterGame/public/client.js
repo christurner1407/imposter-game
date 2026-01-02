@@ -33,9 +33,10 @@ function clearSession() {
 
 const persistentPlayerId = getPlayerId();
 
-// Socket.IO connection with Cloudflare-compatible settings
+// Socket.IO connection - WebSocket only (Cloudflare compatible)
 const socket = io({
     transports: ["websocket"],
+    upgrade: false,
     secure: true
 });
 
