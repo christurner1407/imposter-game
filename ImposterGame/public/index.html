@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Imposter Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .phase-lobby { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .phase-discussion { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+        .phase-voting { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); }
+        .phase-results { background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%); }
+        .phase-ended { background: linear-gradient(135deg, #434343 0%, #000000 100%); }
+        
+        /* Ensure minimum touch target size */
+        .touch-target {
+            min-height: 48px;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 min-h-screen flex items-center justify-center p-2 sm:p-4">
+    
+    <!-- Lobby Screen -->
+    <div id="lobby" class="hidden w-full max-w-md mx-auto">
+        <div class="bg-gray-800 rounded-2xl shadow-2xl p-6 sm:p-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-center text-white mb-2">Imposter</h1>
+            <p class="text-gray-400 text-center text-sm sm:text-base mb-6 sm:mb-8">Find the imposter among you</p>
+            
+            <div class="space-y-4">
+                <input type="text" id="playerName" 
+                    class="w-full px-4 py-4 bg-gray-700 text-white rounded-xl text-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 touch-target"
+                    placeholder="Enter your name" maxlength="20">
+                
+                <button id="createBtn" 
+                    class="w-full py-4 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold text-lg rounded-xl transition-colors touch-target">
+                    Create Session
+                </button>
+                
+                <div class="flex items-center gap-4 my-4 sm:my-6">
+                    <div class="flex-1 h-px bg-gray-600"></div>
+                    <span class="text-gray-400 text-xs sm:text-sm">OR JOIN</span>
+                    <div class="flex-1 h-px bg-gray-600"></div>
+                </div>
+                
+                <input type="text" id="sessionCode" 
+                    class="w-full px-4 py-4 bg-gray-700 text-white rounded-xl text-xl text-center uppercase tracking-widest placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 touch-target"
+                    placeholder="CODE" maxlength="4">
+                
+                <button id="joinBtn" 
+                    class="w-full py-4 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-bold text-lg rounded-xl transition-colors touch-target">
+                    Join Session
+                </button>
+                
+                <p id="error" class="text-red-400 text-center text-sm min-h-[24px]"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Room/Waiting Screen -->
+    <div id="room" class="hidden w-full max-w-md mx-auto">
+        <div class="bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+            <!-- Session Code Header -->
+            <div class="phase-lobby p-4 sm:p-6 text-center">
+                <p class="text-white/70 text-xs sm:text-sm uppercase tracking-wide">Session Code</p>
+                <p id="roomCode" class="text-4xl sm:text-5xl font-bold text-white tracking-widest"></p>
+            </div>
+            
+            <div class="p-4 sm:p-6 space-y-5">
+                <!-- Mode Selection -->
+                <div id="modeSection" class="space-y-3">
+                    <p class="text-gray-400 text-xs uppercase tracking-wide font-medium">Game Mode</p>
+                    <div id="modeToggle" class="flex rounded-xl overflow-hidden">
+                        <button id="presetModeBtn" class="flex-1 py-3 bg-purple-600 text-white font-medium transition-colors touch-target">
+                            Preset
+                        </button>
+                        <button id="customModeBtn" class="flex-1 py-3 bg-gray-700 text-gray-300 font-medium transition-colors touch-target">
+                            Custom
+                        </button>
+                    </div>
+                    
+                    <!-- Preset Section -->
+                    <div id="presetSection" class="space-y-2">
+                        <select id="categoryDropdown" 
+                            class="w-full px-4 py-4 bg-gray-700 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 touch-target">
+                            <option value="">-- Select Category --</option>
+                        </select>
+                        <p id="selectedCategoryDisplay" class="text-green-400 text-sm min-h-[20px]"></p>
+                    </div>
+                    
+                    <!-- Custom Section -->
+                    <div id="customSection" class="hidden space-y-3">
+                        <div id="customHostSection">
+                            <textarea id="customWordsInput" 
+                                class="w-full px-4 py-3 bg-gray-700 text-white rounded-xl h-28 sm:h-32 resize-none placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                placeholder="Enter words (one per line, min 5)"></textarea>
+                            <button id="submitWordsBtn" 
+                                class="w-full py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium rounded-xl mt-2 transition-colors touch-target">
+                                Submit Words
+                            </button>
+                            <p id="customWordsStatus" class="text-sm mt-2 min-h-[20px]"></p>
+                        </div>
+                        <div id="customGuestSection" class="hidden">
+                            <div id="customWordsPreview" class="bg-gray-700 rounded-xl p-4 text-gray-300 text-sm"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Impostor Count Selection -->
+                <div id="impostorCountSection" class="space-y-2">
+                    <p class="text-gray-400 text-xs uppercase tracking-wide font-medium">Number of Impostors</p>
+                    <div id="impostorCountHost">
+                        <select id="impostorCountDropdown" 
+                            class="w-full px-4 py-4 bg-gray-700 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 touch-target">
+                            <option value="1">1 Impostor</option>
+                            <option value="2">2 Impostors</option>
+                            <option value="3">3 Impostors</option>
+                        </select>
+                    </div>
+                    <div id="impostorCountGuest" class="hidden">
+                        <div class="bg-gray-700 rounded-xl px-4 py-4 text-white">
+                            <span id="impostorCountDisplay">1 Impostor</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Players List -->
+                <div>
+                    <p class="text-gray-400 text-xs uppercase tracking-wide font-medium mb-2">Players</p>
+                    <ul id="playerList" class="space-y-2 max-h-40 overflow-y-auto"></ul>
+                </div>
+                
+                <!-- Host Actions -->
+                <div id="hostActions" class="pt-2 border-t border-gray-700">
+                    <button id="startBtn" 
+                        class="hidden w-full py-4 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-bold text-lg rounded-xl transition-colors touch-target">
+                        Start Game
+                    </button>
+                </div>
+                
+                <p id="gameError" class="text-red-400 text-center text-sm min-h-[24px]"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game" class="hidden w-full max-w-md mx-auto">
+        <div class="bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+            <!-- Phase Header -->
+            <div id="phaseHeader" class="phase-discussion p-3 sm:p-4 text-center">
+                <p id="phaseDisplay" class="text-white font-bold text-lg sm:text-xl uppercase tracking-wide"></p>
+            </div>
+            
+            <div class="p-4 sm:p-6 space-y-4">
+                <!-- Role & Word Card -->
+                <div id="roleCard" class="rounded-xl p-4 sm:p-6 text-center">
+                    <p id="categoryInfo" class="text-white/70 text-xs sm:text-sm mb-1 sm:mb-2"></p>
+                    <p id="wordDisplay" class="text-2xl sm:text-3xl font-bold text-white mb-2 sm:mb-4"></p>
+                    <p id="roleDisplay" class="text-lg sm:text-xl font-medium text-white"></p>
+                    <p id="roleHint" class="text-white/70 text-xs sm:text-sm mt-2 hidden"></p>
+                </div>
+                
+                <!-- Discussion Phase -->
+                <div id="discussionSection" class="hidden space-y-4">
+                    <div class="bg-gray-700 rounded-xl p-4">
+                        <p class="text-gray-200 text-center text-sm sm:text-base">Discuss with other players to find the impostor!</p>
+                    </div>
+                    <button id="startVotingBtn" 
+                        class="hidden w-full py-4 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold text-lg rounded-xl transition-colors touch-target">
+                        Start Voting
+                    </button>
+                    <p id="discussionWaiting" class="hidden text-gray-400 text-center text-sm">
+                        Waiting for host to start voting...
+                    </p>
+                </div>
+                
+                <!-- Voting Phase -->
+                <div id="votingSection" class="hidden space-y-4">
+                    <p class="text-gray-400 text-center text-sm">Tap a player to vote:</p>
+                    <div id="votePlayerList" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                    <p id="voteStatus" class="text-gray-400 text-center text-sm font-medium"></p>
+                    <button id="endVotingBtn" 
+                        class="hidden w-full py-4 bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white font-bold text-lg rounded-xl transition-colors touch-target">
+                        End Voting
+                    </button>
+                    <p id="votingWaiting" class="hidden text-gray-400 text-center text-sm">
+                        Waiting for all votes...
+                    </p>
+                </div>
+                
+                <!-- Impostor Guess Section -->
+                <div id="impostorGuessSection" class="hidden space-y-4">
+                    <div class="bg-yellow-600 rounded-xl p-4 text-center">
+                        <p id="guessPromptText" class="text-white font-bold text-lg mb-2">Last Chance!</p>
+                        <p id="guessTimerText" class="text-white/80 text-sm"></p>
+                    </div>
+                    <div id="guessInputSection" class="hidden space-y-3">
+                        <input type="text" id="wordGuessInput" 
+                            class="w-full px-4 py-4 bg-gray-700 text-white rounded-xl text-lg text-center placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 touch-target"
+                            placeholder="Guess the secret word" maxlength="30">
+                        <button id="submitGuessBtn" 
+                            class="w-full py-4 bg-yellow-600 hover:bg-yellow-700 active:bg-yellow-800 text-white font-bold text-lg rounded-xl transition-colors touch-target">
+                            Submit Guess
+                        </button>
+                    </div>
+                    <div id="guessWaitingSection" class="hidden">
+                        <p class="text-gray-400 text-center text-sm">The eliminated impostor is guessing the word...</p>
+                    </div>
+                </div>
+                
+                <!-- Results Phase -->
+                <div id="resultsSection" class="hidden space-y-4">
+                    <div class="bg-gray-700 rounded-xl p-4 sm:p-6 text-center">
+                        <p id="resultsText" class="text-white text-base sm:text-lg"></p>
+                    </div>
+                    <button id="nextRoundBtn" 
+                        class="hidden w-full py-4 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-bold text-lg rounded-xl transition-colors touch-target">
+                        Next Round
+                    </button>
+                    <p id="resultsWaiting" class="hidden text-gray-400 text-center text-sm">
+                        Waiting for host...
+                    </p>
+                </div>
+                
+                <!-- Game Ended -->
+                <div id="endedSection" class="hidden space-y-4">
+                    <div id="endedCard" class="rounded-xl p-6 sm:p-8 text-center">
+                        <p id="winnerText" class="text-2xl sm:text-3xl font-bold text-white mb-2"></p>
+                        <p id="winReason" class="text-white/80 text-sm sm:text-base"></p>
+                    </div>
+                    <button id="playAgainBtn" 
+                        class="hidden w-full py-4 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold text-lg rounded-xl transition-colors touch-target">
+                        Play Again
+                    </button>
+                    <p id="playAgainWaiting" class="hidden text-gray-400 text-center text-sm">
+                        Waiting for host to start next game...
+                    </p>
+                </div>
+                
+                <!-- Players List -->
+                <div>
+                    <p class="text-gray-400 text-xs uppercase tracking-wide font-medium mb-2">Players</p>
+                    <ul id="gamePlayerList" class="space-y-2 max-h-40 overflow-y-auto"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js"></script>
+</body>
+</html>
