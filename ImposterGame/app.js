@@ -57,7 +57,7 @@ const EVENT_RATE_LIMITS = {
     setImpostorCount: { max: 30, windowMs: 60000 },
     submitCustomWords: { max: 20, windowMs: 60000 },
     kickPlayer: { max: 20, windowMs: 60000 },
-    skipWord: { max: 10, windowMs: 60000 }
+    endRound: { max: 10, windowMs: 60000 }
 };
 
 // HTTP Security hardening
@@ -1039,62 +1039,29 @@ io.on("connection", function(socket) {
         endGameAfterGuess(code, isCorrect);
     });
 
-    socket.on("skipWord", function() {
-        if (!checkRateLimit(socket, "skipWord")) return;
+    socket.on("endRound", function() {
+        if (!checkRateLimit(socket, "endRound")) return;
         
         const code = socket.roomCode;
         const room = rooms[code];
         if (!room) return;
         
-        // Only host can skip
+        // Only host can end round
         if (room.hostId !== socket.playerId) {
-            socket.emit("gameError", "Only the host can skip the word");
+            socket.emit("gameError", "Only the host can end the round");
             return;
         }
         
-        // Can only skip during discussion phase
-        if (room.phase !== "discussion") {
-            socket.emit("gameError", "Can only skip word during discussion phase");
+        // Can only end during active game phases (not lobby or already ended)
+        if (room.phase === "lobby" || room.phase === "ended") {
+            socket.emit("gameError", "No active round to end");
             return;
         }
         
-        // Get word list
-        let wordList;
-        if (room.mode === "preset") {
-            wordList = categories[room.selectedCategory];
-        } else {
-            wordList = room.customWords;
-        }
+        console.log("Host ended round early in session " + code);
         
-        // Pick a new word (different from current)
-        let newWord = room.secretWord;
-        let attempts = 0;
-        while (newWord === room.secretWord && attempts < 100) {
-            newWord = wordList[Math.floor(Math.random() * wordList.length)];
-            attempts++;
-        }
-        
-        room.secretWord = newWord;
-        room.votes = {};
-        touchRoom(code);
-        
-        // Send new word to all crew members, notify impostors
-        room.players.forEach(function(player) {
-            if (player.eliminated) return;
-            
-            const role = room.roles[player.id];
-            const playerSocketId = playerSockets[player.id];
-            if (playerSocketId) {
-                const playerSocket = io.sockets.sockets.get(playerSocketId);
-                if (playerSocket) {
-                    playerSocket.emit("wordSkipped", {
-                        word: role === "impostor" ? null : room.secretWord
-                    });
-                }
-            }
-        });
-        
-        console.log("Host skipped word in session " + code + " - New word: " + room.secretWord);
+        // Reset the room back to lobby
+        resetRoomForPlayAgain(code);
     });
 
     socket.on("requestStartVoting", function() {
