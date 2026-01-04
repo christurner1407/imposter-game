@@ -444,7 +444,49 @@ function updatePhaseUI(phase) {
     }
 }
 
-// Update game player list with elimination status
+// Update lobby player list with kick buttons for host
+function updatePlayerList() {
+    playerList.innerHTML = "";
+    currentPlayers.forEach(function(player) {
+        const li = document.createElement("li");
+        li.className = "flex items-center justify-between bg-gray-700 rounded-xl px-4 py-3";
+        
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "text-white";
+        nameSpan.textContent = player.name;
+        
+        const rightSection = document.createElement("div");
+        rightSection.className = "flex items-center gap-2";
+        
+        if (player.isHost) {
+            const hostBadge = document.createElement("span");
+            hostBadge.className = "bg-purple-600 text-white text-xs px-2 py-1 rounded-full uppercase";
+            hostBadge.textContent = "Host";
+            rightSection.appendChild(hostBadge);
+        } else {
+            // Show kick button for host, green dot for others
+            if (isHost) {
+                const kickBtn = document.createElement("button");
+                kickBtn.className = "bg-red-600 hover:bg-red-700 text-white text-xs px-2 py-1 rounded-full uppercase transition-colors";
+                kickBtn.textContent = "Kick";
+                kickBtn.onclick = function() {
+                    kickPlayer(player.id);
+                };
+                rightSection.appendChild(kickBtn);
+            } else {
+                const dot = document.createElement("span");
+                dot.className = "w-2 h-2 bg-green-400 rounded-full";
+                rightSection.appendChild(dot);
+            }
+        }
+        
+        li.appendChild(nameSpan);
+        li.appendChild(rightSection);
+        playerList.appendChild(li);
+    });
+}
+
+// Update game player list with elimination status and kick buttons for host
 function updateGamePlayerList() {
     gamePlayerList.innerHTML = "";
     currentPlayers.forEach(function(player) {
@@ -456,7 +498,30 @@ function updateGamePlayerList() {
             li.classList.add("opacity-50");
             li.innerHTML = '<span class="text-gray-400 line-through">' + player.name + (player.isHost ? ' <span class="text-purple-400 text-sm">(Host)</span>' : '') + '</span><span class="text-red-400 text-xs font-bold uppercase">Out</span>';
         } else {
-            li.innerHTML = '<span class="text-white">' + player.name + (player.isHost ? ' <span class="text-purple-400 text-sm">(Host)</span>' : '') + '</span><span class="w-2 h-2 bg-green-400 rounded-full"></span>';
+            const nameSpan = document.createElement("span");
+            nameSpan.className = "text-white";
+            nameSpan.innerHTML = player.name + (player.isHost ? ' <span class="text-purple-400 text-sm">(Host)</span>' : '');
+            
+            const rightSection = document.createElement("div");
+            rightSection.className = "flex items-center gap-2";
+            
+            // Show kick button for host (except for themselves)
+            if (isHost && player.id !== myPlayerId) {
+                const kickBtn = document.createElement("button");
+                kickBtn.className = "bg-red-600 hover:bg-red-700 text-white text-xs px-2 py-1 rounded-full uppercase transition-colors";
+                kickBtn.textContent = "Kick";
+                kickBtn.onclick = function() {
+                    kickPlayer(player.id);
+                };
+                rightSection.appendChild(kickBtn);
+            }
+            
+            const dot = document.createElement("span");
+            dot.className = "w-2 h-2 bg-green-400 rounded-full";
+            rightSection.appendChild(dot);
+            
+            li.appendChild(nameSpan);
+            li.appendChild(rightSection);
         }
         
         gamePlayerList.appendChild(li);
@@ -468,15 +533,30 @@ function updateGamePlayerList() {
     }
 }
 
-// Update lobby player list
-function updatePlayerList() {
-    playerList.innerHTML = "";
-    currentPlayers.forEach(function(player) {
-        const li = document.createElement("li");
-        li.className = "flex items-center justify-between bg-gray-700 rounded-xl px-4 py-3";
-        li.innerHTML = '<span class="text-white">' + player.name + '</span>' + (player.isHost ? '<span class="bg-purple-600 text-white text-xs px-2 py-1 rounded-full uppercase">Host</span>' : '<span class="w-2 h-2 bg-green-400 rounded-full"></span>');
-        playerList.appendChild(li);
-    });
+// Kick player function (for host)
+function kickPlayer(playerId) {
+    if (!isHost) return;
+    if (playerId === myPlayerId) return;
+    socket.emit("kickPlayer", playerId);
+}
+
+// Handle being kicked
+socket.on("kicked", function(data) {
+    clearSession();
+    currentRoomCode = null;
+    isHost = false;
+    currentPlayers = [];
+    myRole = null;
+    currentTurnOrder = [];
+    gameEnded = false;
+    isEliminated = false;
+    
+    // Show lobby with error message
+    gameDiv.classList.add("hidden");
+    roomDiv.classList.add("hidden");
+    lobbyDiv.classList.remove("hidden");
+    
+    errorP.textContent = data.reason || "You were removed from the session.";
 }
 
 // Show game screen

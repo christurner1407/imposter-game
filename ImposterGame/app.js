@@ -55,7 +55,8 @@ const EVENT_RATE_LIMITS = {
     selectCategory: { max: 30, windowMs: 60000 },
     selectMode: { max: 30, windowMs: 60000 },
     setImpostorCount: { max: 30, windowMs: 60000 },
-    submitCustomWords: { max: 20, windowMs: 60000 }
+    submitCustomWords: { max: 20, windowMs: 60000 },
+    kickPlayer: { max: 20, windowMs: 60000 }
 };
 
 // HTTP Security hardening
@@ -351,6 +352,21 @@ function setPhase(code, newPhase) {
     touchRoom(code);
     io.to(code).emit("phaseChanged", { phase: newPhase });
     console.log("Session " + code + " phase changed to: " + newPhase);
+}
+
+// Update turn order by removing eliminated players
+function updateTurnOrder(code) {
+    const room = rooms[code];
+    if (!room || !room.turnOrder) return;
+    
+    // Filter out eliminated players from turn order
+    room.turnOrder = room.turnOrder.filter(function(player) {
+        const roomPlayer = room.players.find(function(p) { return p.id === player.id; });
+        return roomPlayer && !roomPlayer.eliminated;
+    });
+    
+    // Emit updated turn order to all players
+    io.to(code).emit("turnOrder", room.turnOrder);
 }
 
 // End game with impostor guess result
@@ -1082,6 +1098,10 @@ io.on("connection", function(socket) {
 
         room.votes = {};
         touchRoom(code);
+        
+        // Update turn order to remove eliminated players
+        updateTurnOrder(code);
+        
         setPhase(code, "discussion");
         console.log("Host started next round in session " + code);
     });
@@ -1152,6 +1172,70 @@ io.on("connection", function(socket) {
 
         console.log("requestPlayAgain: resetting room", code);
         resetRoomForPlayAgain(code);
+    });
+
+    socket.on("kickPlayer", function(targetPlayerId) {
+        if (!checkRateLimit(socket, "kickPlayer")) return;
+        
+        const code = socket.roomCode;
+        const room = rooms[code];
+        if (!room) return;
+        
+        // Only host can kick
+        if (room.hostId !== socket.playerId) {
+            socket.emit("gameError", "Only the host can kick players");
+            return;
+        }
+        
+        // Can't kick yourself
+        if (targetPlayerId === socket.playerId) {
+            socket.emit("gameError", "You cannot kick yourself");
+            return;
+        }
+        
+        // Find the target player
+        const targetPlayer = room.players.find(function(p) { return p.id === targetPlayerId; });
+        if (!targetPlayer) {
+            socket.emit("gameError", "Player not found");
+            return;
+        }
+        
+        // Remove player from room
+        room.players = room.players.filter(function(p) { return p.id !== targetPlayerId; });
+        delete room.roles[targetPlayerId];
+        delete room.votes[targetPlayerId];
+        
+        // Remove from turn order if it exists
+        if (room.turnOrder) {
+            room.turnOrder = room.turnOrder.filter(function(p) { return p.id !== targetPlayerId; });
+        }
+        
+        touchRoom(code);
+        
+        // Notify the kicked player
+        const targetSocketId = playerSockets[targetPlayerId];
+        if (targetSocketId) {
+            const targetSocket = io.sockets.sockets.get(targetSocketId);
+            if (targetSocket) {
+                targetSocket.emit("kicked", { reason: "You were removed from the session by the host." });
+                targetSocket.leave(code);
+            }
+            delete playerSockets[targetPlayerId];
+        }
+        
+        // Update all remaining players
+        io.to(code).emit("playerList", room.players);
+        if (room.turnOrder) {
+            io.to(code).emit("turnOrder", room.turnOrder);
+        }
+        
+        console.log("Host kicked " + targetPlayer.name + " (" + targetPlayerId + ") from session " + code);
+        
+        // Check if this affects the game
+        if (room.phase !== "lobby" && room.phase !== "ended") {
+            // Check win conditions after kick
+            checkWinConditions(code);
+        }
     });
 
     socket.on("submitVote", function(votedPlayerId) {
