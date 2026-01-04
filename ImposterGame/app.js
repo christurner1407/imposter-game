@@ -259,7 +259,7 @@ function generateCode() {
     let attempts = 0;
     do {
         code = "";
-        for (let i = 0; i = 4; i++) {
+        for (let i = 0; i < 4; i++) {
             code += chars.charAt(Math.floor(Math.random() * chars.length));
         }
         attempts++;
