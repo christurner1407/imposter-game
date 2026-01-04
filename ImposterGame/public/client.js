@@ -126,6 +126,53 @@ let guessTimerInterval = null;
 let currentTurnOrder = [];
 let myRole = null;
 
+// ============ SCREEN MANAGEMENT ============
+// Ensure only one screen is visible at a time to prevent split-screen bugs
+
+function hideAllScreens() {
+    lobbyDiv.classList.add("hidden");
+    roomDiv.classList.add("hidden");
+    gameDiv.classList.add("hidden");
+}
+
+function showLobbyScreen() {
+    hideAllScreens();
+    lobbyDiv.classList.remove("hidden");
+}
+
+function showRoomScreen(roomCode) {
+    hideAllScreens();
+    currentRoomCode = roomCode;
+    roomDiv.classList.remove("hidden");
+    roomCodeSpan.textContent = roomCode;
+}
+
+function showGameScreen(roomCode) {
+    hideAllScreens();
+    currentRoomCode = roomCode;
+    gameDiv.classList.remove("hidden");
+}
+
+// ============ STATE RESET ============
+// Reset all client state when leaving a session
+
+function resetClientState() {
+    currentRoomCode = null;
+    isHost = false;
+    currentPlayers = [];
+    myRole = null;
+    currentTurnOrder = [];
+    gameEnded = false;
+    isEliminated = false;
+    selectedVote = null;
+    
+    // Clear any running timers
+    if (guessTimerInterval) {
+        clearInterval(guessTimerInterval);
+        guessTimerInterval = null;
+    }
+}
+
 // Try to reconnect on page load
 socket.on("connect", function() {
     const storedSession = getStoredSession();
@@ -136,8 +183,18 @@ socket.on("connect", function() {
             playerName: storedSession.playerName
         });
     } else {
-        lobbyDiv.classList.remove("hidden");
+        showLobbyScreen();
     }
+});
+
+// Handle socket disconnection - don't kick, allow reconnect
+socket.on("disconnect", function() {
+    console.log("Socket disconnected, will attempt to reconnect...");
+});
+
+// Handle socket reconnection
+socket.on("reconnect_attempt", function() {
+    console.log("Attempting to reconnect...");
 });
 
 createBtn.addEventListener("click", function() {
@@ -385,11 +442,8 @@ function hideImpostorGuessSection() {
     }
 }
 
-// Update UI based on phase
-function updatePhaseUI(phase) {
-    phaseDisplay.textContent = phase.toUpperCase() + " PHASE";
-    updatePhaseHeader(phase);
-    
+// Hide all game phase sections
+function hideAllPhaseSections() {
     discussionSection.classList.add("hidden");
     votingSection.classList.add("hidden");
     resultsSection.classList.add("hidden");
@@ -404,10 +458,20 @@ function updatePhaseUI(phase) {
     resultsWaiting.classList.add("hidden");
     playAgainBtn.classList.add("hidden");
     playAgainWaiting.classList.add("hidden");
+}
+
+// Update UI based on phase
+function updatePhaseUI(phase) {
+    phaseDisplay.textContent = phase.toUpperCase() + " PHASE";
+    updatePhaseHeader(phase);
+    
+    // Hide all sections first to prevent split-screen
+    hideAllPhaseSections();
     
     switch (phase) {
         case "discussion":
             discussionSection.classList.remove("hidden");
+            renderTurnOrder();
             if (isHost) {
                 startVotingBtn.classList.remove("hidden");
             } else {
@@ -434,7 +498,6 @@ function updatePhaseUI(phase) {
         case "ended":
             endedSection.classList.remove("hidden");
             gameEnded = true;
-            // Don't clear session here - we need it for play again
             if (isHost) {
                 playAgainBtn.classList.remove("hidden");
             } else {
@@ -443,6 +506,23 @@ function updatePhaseUI(phase) {
             break;
     }
 }
+
+// Kick player function (for host)
+function kickPlayer(playerId) {
+    if (!isHost) return;
+    if (playerId === myPlayerId) return;
+    socket.emit("kickPlayer", playerId);
+}
+
+// Handle being kicked
+socket.on("kicked", function(data) {
+    clearSession();
+    resetClientState();
+    
+    // Show lobby with error message
+    showLobbyScreen();
+    errorP.textContent = data.reason || "You were removed from the session.";
+});
 
 // Update lobby player list with kick buttons for host
 function updatePlayerList() {
@@ -500,7 +580,7 @@ function updateGamePlayerList() {
         } else {
             const nameSpan = document.createElement("span");
             nameSpan.className = "text-white";
-            nameSpan.innerHTML = player.name + (player.isHost ? ' <span class="text-purple-400 text-sm">(Host)</span>' : '');
+            nameSpan.innerHTML = player.name + (player.isHost ? ' <span class="text-purple-400 text-sm">(Host)</span>' : '' );
             
             const rightSection = document.createElement("div");
             rightSection.className = "flex items-center gap-2";
@@ -531,49 +611,6 @@ function updateGamePlayerList() {
     if (me) {
         isEliminated = me.eliminated;
     }
-}
-
-// Kick player function (for host)
-function kickPlayer(playerId) {
-    if (!isHost) return;
-    if (playerId === myPlayerId) return;
-    socket.emit("kickPlayer", playerId);
-}
-
-// Handle being kicked
-socket.on("kicked", function(data) {
-    clearSession();
-    currentRoomCode = null;
-    isHost = false;
-    currentPlayers = [];
-    myRole = null;
-    currentTurnOrder = [];
-    gameEnded = false;
-    isEliminated = false;
-    
-    // Show lobby with error message
-    gameDiv.classList.add("hidden");
-    roomDiv.classList.add("hidden");
-    lobbyDiv.classList.remove("hidden");
-    
-    errorP.textContent = data.reason || "You were removed from the session.";
-}
-
-// Show game screen
-function showGameScreen(roomCode) {
-    currentRoomCode = roomCode;
-    lobbyDiv.classList.add("hidden");
-    roomDiv.classList.add("hidden");
-    gameDiv.classList.remove("hidden");
-}
-
-// Show room screen
-function showRoomScreen(roomCode) {
-    currentRoomCode = roomCode;
-    lobbyDiv.classList.add("hidden");
-    roomDiv.classList.remove("hidden");
-    gameDiv.classList.add("hidden");
-    roomCodeSpan.textContent = roomCode;
 }
 
 socket.on("sessionCreated", function(data) {
@@ -615,9 +652,11 @@ socket.on("reconnectSuccess", function(data) {
         showRoomScreen(data.roomCode);
         if (isHost) {
             startBtn.classList.remove("hidden");
+        } else {
+            startBtn.classList.add("hidden");
         }
         modeSection.classList.remove("hidden");
-        updateImpostorCountUI(1);
+        updateImpostorCountUI(data.impostorCount || 1);
         socket.emit("getCategories");
     } else {
         showGameScreen(data.roomCode);
@@ -641,7 +680,6 @@ socket.on("reconnectSuccess", function(data) {
         // Restore turn order if available
         if (data.turnOrder) {
             currentTurnOrder = data.turnOrder;
-            renderTurnOrder();
         }
         
         updatePhaseUI(data.phase);
@@ -655,7 +693,8 @@ socket.on("reconnectSuccess", function(data) {
 
 socket.on("reconnectFailed", function() {
     clearSession();
-    lobbyDiv.classList.remove("hidden");
+    resetClientState();
+    showLobbyScreen();
 });
 
 socket.on("modeChanged", function(data) {
@@ -676,6 +715,8 @@ socket.on("categoriesList", function(categories) {
     categoryDropdown.disabled = !isHost;
     if (!isHost) {
         categoryDropdown.classList.add("cursor-not-allowed", "opacity-70");
+    } else {
+        categoryDropdown.classList.remove("cursor-not-allowed", "opacity-70");
     }
 });
 
@@ -769,8 +810,9 @@ socket.on("voteUpdate", function(data) {
 });
 
 socket.on("voteResults", function(data) {
-    resultsSection.classList.remove("hidden");
+    // Hide voting section explicitly
     votingSection.classList.add("hidden");
+    resultsSection.classList.remove("hidden");
     
     if (data.noVotes) {
         resultsText.textContent = "No votes cast. No one eliminated.";
@@ -799,6 +841,11 @@ function showImpostorGuessInput(timeLimit) {
     let remaining = timeLimit;
     guessTimerText.textContent = remaining + " seconds remaining";
     
+    // Clear any existing timer
+    if (guessTimerInterval) {
+        clearInterval(guessTimerInterval);
+    }
+    
     guessTimerInterval = setInterval(function() {
         remaining--;
         guessTimerText.textContent = remaining + " seconds remaining";
@@ -826,6 +873,11 @@ socket.on("impostorGuessing", function(data) {
     let remaining = data.timeLimit;
     guessTimerText.textContent = remaining + " seconds remaining";
     
+    // Clear any existing timer
+    if (guessTimerInterval) {
+        clearInterval(guessTimerInterval);
+    }
+    
     guessTimerInterval = setInterval(function() {
         remaining--;
         guessTimerText.textContent = remaining + " seconds remaining";
@@ -845,9 +897,11 @@ socket.on("impostorGuessResult", function(data) {
 socket.on("gameEnded", function(data) {
     gameEnded = true;
     hideImpostorGuessSection();
-    resultsSection.classList.add("hidden");
-    nextRoundBtn.classList.add("hidden");
-    resultsWaiting.classList.add("hidden");
+    
+    // Hide all other sections first
+    hideAllPhaseSections();
+    
+    // Show ended section
     endedSection.classList.remove("hidden");
     
     if (data.winner === "crew") {
@@ -880,18 +934,20 @@ socket.on("gameReset", function() {
     myRole = null;
     currentTurnOrder = [];
     
+    // Clear any timers
+    if (guessTimerInterval) {
+        clearInterval(guessTimerInterval);
+        guessTimerInterval = null;
+    }
+    
     // Reset the play again button
     playAgainBtn.disabled = false;
     playAgainBtn.textContent = "Play Again";
     playAgainBtn.classList.add("hidden");
     playAgainWaiting.classList.add("hidden");
     
-    // Hide game screen, show room screen
-    gameDiv.classList.add("hidden");
-    roomDiv.classList.remove("hidden");
-    lobbyDiv.classList.add("hidden");
-    
-    roomCodeSpan.textContent = currentRoomCode;
+    // Show room screen (hides all others automatically)
+    showRoomScreen(currentRoomCode);
     
     // Show start button for host
     if (isHost) {
