@@ -56,7 +56,8 @@ const EVENT_RATE_LIMITS = {
     selectMode: { max: 30, windowMs: 60000 },
     setImpostorCount: { max: 30, windowMs: 60000 },
     submitCustomWords: { max: 20, windowMs: 60000 },
-    kickPlayer: { max: 20, windowMs: 60000 }
+    kickPlayer: { max: 20, windowMs: 60000 },
+    skipWord: { max: 10, windowMs: 60000 }
 };
 
 // HTTP Security hardening
@@ -258,7 +259,7 @@ function generateCode() {
     let attempts = 0;
     do {
         code = "";
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i = 4; i++) {
             code += chars.charAt(Math.floor(Math.random() * chars.length));
         }
         attempts++;
@@ -500,8 +501,13 @@ function checkWinConditions(code) {
         const reason = room.impostorCount === 1 ? "The impostor was eliminated!" : "All impostors were eliminated!";
         io.to(code).emit("gameEnded", { winner: "crew", reason: reason });
     } else if (aliveImpostors.length >= aliveCrew.length) {
+        // Impostors win when they equal or outnumber crew members
         setPhase(code, "ended");
-        io.to(code).emit("gameEnded", { winner: "impostor", reason: "Impostors have taken over!" });
+        if (aliveImpostors.length === 1) {
+            io.to(code).emit("gameEnded", { winner: "impostor", reason: "The impostor has taken over!" });
+        } else {
+            io.to(code).emit("gameEnded", { winner: "impostor", reason: "The impostors have taken over!" });
+        }
     }
 }
 
@@ -1031,6 +1037,64 @@ io.on("connection", function(socket) {
         });
         
         endGameAfterGuess(code, isCorrect);
+    });
+
+    socket.on("skipWord", function() {
+        if (!checkRateLimit(socket, "skipWord")) return;
+        
+        const code = socket.roomCode;
+        const room = rooms[code];
+        if (!room) return;
+        
+        // Only host can skip
+        if (room.hostId !== socket.playerId) {
+            socket.emit("gameError", "Only the host can skip the word");
+            return;
+        }
+        
+        // Can only skip during discussion phase
+        if (room.phase !== "discussion") {
+            socket.emit("gameError", "Can only skip word during discussion phase");
+            return;
+        }
+        
+        // Get word list
+        let wordList;
+        if (room.mode === "preset") {
+            wordList = categories[room.selectedCategory];
+        } else {
+            wordList = room.customWords;
+        }
+        
+        // Pick a new word (different from current)
+        let newWord = room.secretWord;
+        let attempts = 0;
+        while (newWord === room.secretWord && attempts < 100) {
+            newWord = wordList[Math.floor(Math.random() * wordList.length)];
+            attempts++;
+        }
+        
+        room.secretWord = newWord;
+        room.votes = {};
+        touchRoom(code);
+        
+        // Send new word to all crew members, notify impostors
+        room.players.forEach(function(player) {
+            if (player.eliminated) return;
+            
+            const role = room.roles[player.id];
+            const playerSocketId = playerSockets[player.id];
+            if (playerSocketId) {
+                const playerSocket = io.sockets.sockets.get(playerSocketId);
+                if (playerSocket) {
+                    playerSocket.emit("wordSkipped", {
+                        word: role === "impostor" ? null : room.secretWord
+                    });
+                }
+            }
+        });
+        
+        console.log("Host skipped word in session " + code + " - New word: " + room.secretWord);
     });
 
     socket.on("requestStartVoting", function() {

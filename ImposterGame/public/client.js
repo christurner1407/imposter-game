@@ -272,6 +272,14 @@ nextRoundBtn.addEventListener("click", function() {
     socket.emit("requestNextRound");
 });
 
+// Skip word handler
+const skipWordBtn = document.getElementById("skipWordBtn");
+if (skipWordBtn) {
+    skipWordBtn.addEventListener("click", function() {
+        socket.emit("skipWord");
+    });
+}
+
 // Submit word guess
 submitGuessBtn.addEventListener("click", function() {
     const guess = wordGuessInput.value.trim();
@@ -468,12 +476,22 @@ function updatePhaseUI(phase) {
     // Hide all sections first to prevent split-screen
     hideAllPhaseSections();
     
+    // Hide skip button by default
+    const skipWordBtn = document.getElementById("skipWordBtn");
+    if (skipWordBtn) {
+        skipWordBtn.classList.add("hidden");
+    }
+    
     switch (phase) {
         case "discussion":
             discussionSection.classList.remove("hidden");
             renderTurnOrder();
             if (isHost) {
                 startVotingBtn.classList.remove("hidden");
+                // Show skip button for host
+                if (skipWordBtn) {
+                    skipWordBtn.classList.remove("hidden");
+                }
             } else {
                 discussionWaiting.classList.remove("hidden");
             }
@@ -979,5 +997,585 @@ socket.on("roleAssigned", function(data) {
         roleDisplay.textContent = "You are CREW";
         wordDisplay.textContent = data.word;
         roleHint.classList.add("hidden");
+    }
+});
+
+// Skip word handler (for host)
+function skipWord() {
+    if (!isHost) return;
+    socket.emit("skipWord");
+}
+
+// Handle word skipped event
+socket.on("wordSkipped", function(data) {
+    // Update the word display for crew members
+    if (myRole === "crew" && data.word) {
+        wordDisplay.textContent = data.word;
+        // Flash the word to indicate it changed
+        wordDisplay.classList.add("animate-pulse");
+        setTimeout(function() {
+            wordDisplay.classList.remove("animate-pulse");
+        }, 1000);
+    }
+    
+    // Show a notification
+    if (myRole === "impostor") {
+        roleHint.textContent = "The host skipped the word. A new word was chosen!";
+    }
+});
+
+// Update UI based on phase
+function updatePhaseUI(phase) {
+    phaseDisplay.textContent = phase.toUpperCase() + " PHASE";
+    updatePhaseHeader(phase);
+    
+    // Hide all sections first to prevent split-screen
+    hideAllPhaseSections();
+    
+    // Hide skip button by default
+    const skipWordBtn = document.getElementById("skipWordBtn");
+    if (skipWordBtn) {
+        skipWordBtn.classList.add("hidden");
+    }
+    
+    switch (phase) {
+        case "discussion":
+            discussionSection.classList.remove("hidden");
+            renderTurnOrder();
+            if (isHost) {
+                startVotingBtn.classList.remove("hidden");
+                // Show skip button for host
+                if (skipWordBtn) {
+                    skipWordBtn.classList.remove("hidden");
+                }
+            } else {
+                discussionWaiting.classList.remove("hidden");
+            }
+            break;
+        case "voting":
+            votingSection.classList.remove("hidden");
+            renderVoteButtons();
+            if (isHost) {
+                endVotingBtn.classList.remove("hidden");
+            } else {
+                votingWaiting.classList.remove("hidden");
+            }
+            break;
+        case "results":
+            resultsSection.classList.remove("hidden");
+            if (isHost && !gameEnded) {
+                nextRoundBtn.classList.remove("hidden");
+            } else if (!gameEnded) {
+                resultsWaiting.classList.remove("hidden");
+            }
+            break;
+        case "ended":
+            endedSection.classList.remove("hidden");
+            gameEnded = true;
+            if (isHost) {
+                playAgainBtn.classList.remove("hidden");
+            } else {
+                playAgainWaiting.classList.remove("hidden");
+            }
+            break;
+    }
+}
+
+// Kick player function (for host)
+function kickPlayer(playerId) {
+    if (!isHost) return;
+    if (playerId === myPlayerId) return;
+    socket.emit("kickPlayer", playerId);
+}
+
+// Handle being kicked
+socket.on("kicked", function(data) {
+    clearSession();
+    resetClientState();
+    
+    // Show lobby with error message
+    showLobbyScreen();
+    errorP.textContent = data.reason || "You were removed from the session.";
+});
+
+// Update lobby player list with kick buttons for host
+function updatePlayerList() {
+    playerList.innerHTML = "";
+    currentPlayers.forEach(function(player) {
+        const li = document.createElement("li");
+        li.className = "flex items-center justify-between bg-gray-700 rounded-xl px-4 py-3";
+        
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "text-white";
+        nameSpan.textContent = player.name;
+        
+        const rightSection = document.createElement("div");
+        rightSection.className = "flex items-center gap-2";
+        
+        if (player.isHost) {
+            const hostBadge = document.createElement("span");
+            hostBadge.className = "bg-purple-600 text-white text-xs px-2 py-1 rounded-full uppercase";
+            hostBadge.textContent = "Host";
+            rightSection.appendChild(hostBadge);
+        } else {
+            // Show kick button for host, green dot for others
+            if (isHost) {
+                const kickBtn = document.createElement("button");
+                kickBtn.className = "bg-red-600 hover:bg-red-700 text-white text-xs px-2 py-1 rounded-full uppercase transition-colors";
+                kickBtn.textContent = "Kick";
+                kickBtn.onclick = function() {
+                    kickPlayer(player.id);
+                };
+                rightSection.appendChild(kickBtn);
+            } else {
+                const dot = document.createElement("span");
+                dot.className = "w-2 h-2 bg-green-400 rounded-full";
+                rightSection.appendChild(dot);
+            }
+        }
+        
+        li.appendChild(nameSpan);
+        li.appendChild(rightSection);
+        playerList.appendChild(li);
+    });
+}
+
+// Update game player list with elimination status and kick buttons for host
+function updateGamePlayerList() {
+    gamePlayerList.innerHTML = "";
+    currentPlayers.forEach(function(player) {
+        const li = document.createElement("li");
+        li.className = "flex items-center justify-between bg-gray-700 rounded-xl px-4 py-3";
+        
+        // Consistent styling for all players - no role indicators
+        if (player.eliminated) {
+            li.classList.add("opacity-50");
+            li.innerHTML = '<span class="text-gray-400 line-through">' + player.name + (player.isHost ? ' <span class="text-purple-400 text-sm">(Host)</span>' : '') + '</span><span class="text-red-400 text-xs font-bold uppercase">Out</span>';
+        } else {
+            const nameSpan = document.createElement("span");
+            nameSpan.className = "text-white";
+            nameSpan.innerHTML = player.name + (player.isHost ? ' <span class="text-purple-400 text-sm">(Host)</span>' : '' );
+            
+            const rightSection = document.createElement("div");
+            rightSection.className = "flex items-center gap-2";
+            
+            // Show kick button for host (except for themselves)
+            if (isHost && player.id !== myPlayerId) {
+                const kickBtn = document.createElement("button");
+                kickBtn.className = "bg-red-600 hover:bg-red-700 text-white text-xs px-2 py-1 rounded-full uppercase transition-colors";
+                kickBtn.textContent = "Kick";
+                kickBtn.onclick = function() {
+                    kickPlayer(player.id);
+                };
+                rightSection.appendChild(kickBtn);
+            }
+            
+            const dot = document.createElement("span");
+            dot.className = "w-2 h-2 bg-green-400 rounded-full";
+            rightSection.appendChild(dot);
+            
+            li.appendChild(nameSpan);
+            li.appendChild(rightSection);
+        }
+        
+        gamePlayerList.appendChild(li);
+    });
+    
+    const me = currentPlayers.find(function(p) { return p.id === myPlayerId; });
+    if (me) {
+        isEliminated = me.eliminated;
+    }
+}
+
+socket.on("sessionCreated", function(data) {
+    isHost = true;
+    showRoomScreen(data.code);
+    storeSession(data.code, data.playerName);
+    startBtn.classList.remove("hidden");
+    modeSection.classList.remove("hidden");
+    updateImpostorCountUI(1);
+    socket.emit("getCategories");
+});
+
+socket.on("sessionJoined", function(data) {
+    isHost = false;
+    showRoomScreen(data.code);
+    storeSession(data.code, data.playerName);
+    modeSection.classList.remove("hidden");
+    updateImpostorCountUI(1);
+    socket.emit("getCategories");
+});
+
+socket.on("impostorCountChanged", function(data) {
+    updateImpostorCountUI(data.count);
+});
+
+socket.on("reconnectSuccess", function(data) {
+    isHost = data.isHost;
+    currentRoomCode = data.roomCode;
+    isEliminated = data.eliminated;
+    gameEnded = data.phase === "ended";
+    
+    // Re-store session for future reconnects
+    const storedSession = getStoredSession();
+    if (storedSession) {
+        storeSession(data.roomCode, storedSession.playerName);
+    }
+    
+    if (data.phase === "lobby") {
+        showRoomScreen(data.roomCode);
+        if (isHost) {
+            startBtn.classList.remove("hidden");
+        } else {
+            startBtn.classList.add("hidden");
+        }
+        modeSection.classList.remove("hidden");
+        updateImpostorCountUI(data.impostorCount || 1);
+        socket.emit("getCategories");
+    } else {
+        showGameScreen(data.roomCode);
+        
+        categoryInfo.textContent = "Category: " + data.category;
+        myRole = data.role;
+        
+        if (data.role === "impostor") {
+            roleCard.className = "rounded-xl p-4 sm:p-6 text-center bg-red-600";
+            roleDisplay.textContent = "You are the IMPOSTOR";
+            wordDisplay.textContent = "";
+            roleHint.textContent = "You do not receive the secret word. Blend in!";
+            roleHint.classList.remove("hidden");
+        } else {
+            roleCard.className = "rounded-xl p-4 sm:p-6 text-center bg-green-600";
+            roleDisplay.textContent = "You are CREW";
+            wordDisplay.textContent = data.word || "";
+            roleHint.classList.add("hidden");
+        }
+        
+        // Restore turn order if available
+        if (data.turnOrder) {
+            currentTurnOrder = data.turnOrder;
+        }
+        
+        updatePhaseUI(data.phase);
+        
+        // Check if we need to show guess prompt
+        if (data.pendingGuess) {
+            showImpostorGuessInput(30);
+        }
+    }
+});
+
+socket.on("reconnectFailed", function() {
+    clearSession();
+    resetClientState();
+    showLobbyScreen();
+});
+
+socket.on("modeChanged", function(data) {
+    updateModeUI(data.mode);
+    selectedCategoryDisplay.textContent = "";
+    customWordsStatus.textContent = "";
+    customWordsPreview.textContent = "";
+});
+
+socket.on("categoriesList", function(categories) {
+    categoryDropdown.innerHTML = '<option value="">-- Select Category --</option>';
+    categories.forEach(function(cat) {
+        const option = document.createElement("option");
+        option.value = cat;
+        option.textContent = cat;
+        categoryDropdown.appendChild(option);
+    });
+    categoryDropdown.disabled = !isHost;
+    if (!isHost) {
+        categoryDropdown.classList.add("cursor-not-allowed", "opacity-70");
+    } else {
+        categoryDropdown.classList.remove("cursor-not-allowed", "opacity-70");
+    }
+});
+
+socket.on("categorySelected", function(categoryName) {
+    if (categoryName) {
+        selectedCategoryDisplay.textContent = "Selected: " + categoryName;
+        selectedCategoryDisplay.className = "text-green-400 text-sm min-h-[20px]";
+        if (isHost) {
+            categoryDropdown.value = categoryName;
+        }
+    } else {
+        selectedCategoryDisplay.textContent = "";
+        categoryDropdown.value = "";
+    }
+});
+
+socket.on("customWordsUpdated", function(data) {
+    if (data.valid) {
+        customWordsStatus.textContent = data.count + " words ready";
+        customWordsStatus.className = "text-sm mt-2 text-green-400 min-h-[20px]";
+    } else if (data.count > 0) {
+        customWordsStatus.textContent = data.count + "/" + data.minRequired + " words needed";
+        customWordsStatus.className = "text-sm mt-2 text-red-400 min-h-[20px]";
+    } else {
+        customWordsStatus.textContent = "";
+        customWordsStatus.className = "text-sm mt-2 min-h-[20px]";
+    }
+    
+    if (!isHost && data.words.length > 0) {
+        customWordsPreview.textContent = data.words.length + " words ready";
+        customWordsPreview.className = "bg-gray-700 rounded-xl p-4 text-green-400 text-sm";
+    } else if (!isHost) {
+        customWordsPreview.textContent = "Waiting for host...";
+        customWordsPreview.className = "bg-gray-700 rounded-xl p-4 text-gray-400 text-sm";
+    }
+});
+
+socket.on("joinError", function(message) {
+    errorP.textContent = message;
+});
+
+socket.on("gameError", function(message) {
+    gameErrorP.textContent = message;
+});
+
+socket.on("playerList", function(players) {
+    currentPlayers = players;
+    updatePlayerList();
+    
+    if (!gameDiv.classList.contains("hidden")) {
+        updateGamePlayerList();
+    }
+});
+
+socket.on("turnOrder", function(order) {
+    currentTurnOrder = order;
+    renderTurnOrder();
+});
+
+// Render turn order display
+function renderTurnOrder() {
+    const turnOrderList = document.getElementById("turnOrderList");
+    if (!turnOrderList || currentTurnOrder.length === 0) return;
+    
+    turnOrderList.innerHTML = "";
+    currentTurnOrder.forEach(function(player, index) {
+        const li = document.createElement("li");
+        li.className = "flex items-center gap-2 text-white text-sm";
+        const isMe = player.id === myPlayerId;
+        li.innerHTML = '<span class="text-purple-400 font-bold w-5">' + (index + 1) + '.</span><span class="' + (isMe ? 'text-yellow-400 font-medium' : 'text-white') + '">' + player.name + (isMe ? ' (You)' : '') + '</span>';
+        turnOrderList.appendChild(li);
+    });
+}
+
+socket.on("gameStarted", function() {
+    showGameScreen(currentRoomCode);
+    isEliminated = false;
+    gameEnded = false;
+    myRole = null;
+    updateGamePlayerList();
+});
+
+socket.on("phaseChanged", function(data) {
+    updatePhaseUI(data.phase);
+});
+
+socket.on("voteUpdate", function(data) {
+    if (!isEliminated) {
+        voteStatus.textContent = "Votes: " + data.votesSubmitted + " of " + data.totalVoters;
+    }
+});
+
+socket.on("voteResults", function(data) {
+    // Hide voting section explicitly
+    votingSection.classList.add("hidden");
+    resultsSection.classList.remove("hidden");
+    
+    if (data.noVotes) {
+        resultsText.textContent = "No votes cast. No one eliminated.";
+    } else if (data.tie) {
+        resultsText.textContent = "Tie vote! No one eliminated.";
+    } else if (data.eliminated) {
+        const roleText = data.eliminated.role === "impostor" ? "an IMPOSTOR" : "a crew member";
+        resultsText.innerHTML = '<span class="text-xl sm:text-2xl font-bold block mb-2">' + data.eliminated.name + '</span>was eliminated!<br><span class="text-base sm:text-lg mt-2 block">They were ' + roleText + '.</span>';
+    } else {
+        resultsText.textContent = "No one eliminated.";
+    }
+});
+
+// Show impostor guess input
+function showImpostorGuessInput(timeLimit) {
+    resultsSection.classList.add("hidden");
+    impostorGuessSection.classList.remove("hidden");
+    guessInputSection.classList.remove("hidden");
+    guessWaitingSection.classList.add("hidden");
+    
+    guessPromptText.textContent = "Last Chance! Guess the word to win!";
+    wordGuessInput.value = "";
+    submitGuessBtn.disabled = false;
+    submitGuessBtn.textContent = "Submit Guess";
+    
+    let remaining = timeLimit;
+    guessTimerText.textContent = remaining + " seconds remaining";
+    
+    // Clear any existing timer
+    if (guessTimerInterval) {
+        clearInterval(guessTimerInterval);
+    }
+    
+    guessTimerInterval = setInterval(function() {
+        remaining--;
+        guessTimerText.textContent = remaining + " seconds remaining";
+        if (remaining <= 0) {
+            clearInterval(guessTimerInterval);
+            guessTimerInterval = null;
+        }
+    }, 1000);
+}
+
+// Impostor guess prompt (for the eliminated impostor)
+socket.on("impostorGuessPrompt", function(data) {
+    showImpostorGuessInput(data.timeLimit);
+});
+
+// Impostor is guessing (for other players)
+socket.on("impostorGuessing", function(data) {
+    resultsSection.classList.add("hidden");
+    impostorGuessSection.classList.remove("hidden");
+    guessInputSection.classList.add("hidden");
+    guessWaitingSection.classList.remove("hidden");
+    
+    guessPromptText.textContent = data.impostorName + " is guessing the word...";
+    
+    let remaining = data.timeLimit;
+    guessTimerText.textContent = remaining + " seconds remaining";
+    
+    // Clear any existing timer
+    if (guessTimerInterval) {
+        clearInterval(guessTimerInterval);
+    }
+    
+    guessTimerInterval = setInterval(function() {
+        remaining--;
+        guessTimerText.textContent = remaining + " seconds remaining";
+        if (remaining <= 0) {
+            clearInterval(guessTimerInterval);
+            guessTimerInterval = null;
+        }
+    }, 1000);
+});
+
+// Impostor guess result
+socket.on("impostorGuessResult", function(data) {
+    hideImpostorGuessSection();
+    // Game ended event will follow
+});
+
+socket.on("gameEnded", function(data) {
+    gameEnded = true;
+    hideImpostorGuessSection();
+    
+    // Hide all other sections first
+    hideAllPhaseSections();
+    
+    // Show ended section
+    endedSection.classList.remove("hidden");
+    
+    if (data.winner === "crew") {
+        endedCard.className = "rounded-xl p-6 sm:p-8 text-center bg-green-600";
+        winnerText.textContent = "CREW WINS";
+    } else {
+        endedCard.className = "rounded-xl p-6 sm:p-8 text-center bg-red-600";
+        winnerText.textContent = "IMPOSTORS WIN";
+    }
+    winReason.textContent = data.reason;
+    phaseDisplay.textContent = "GAME OVER";
+    updatePhaseHeader("ended");
+    
+    // Show play again button for host, waiting message for others
+    if (isHost) {
+        playAgainBtn.classList.remove("hidden");
+        playAgainWaiting.classList.add("hidden");
+    } else {
+        playAgainBtn.classList.add("hidden");
+        playAgainWaiting.classList.remove("hidden");
+    }
+});
+
+// Game reset (play again)
+socket.on("gameReset", function() {
+    console.log("gameReset received");
+    
+    gameEnded = false;
+    isEliminated = false;
+    myRole = null;
+    currentTurnOrder = [];
+    
+    // Clear any timers
+    if (guessTimerInterval) {
+        clearInterval(guessTimerInterval);
+        guessTimerInterval = null;
+    }
+    
+    // Reset the play again button
+    playAgainBtn.disabled = false;
+    playAgainBtn.textContent = "Play Again";
+    playAgainBtn.classList.add("hidden");
+    playAgainWaiting.classList.add("hidden");
+    
+    // Show room screen (hides all others automatically)
+    showRoomScreen(currentRoomCode);
+    
+    // Show start button for host
+    if (isHost) {
+        startBtn.classList.remove("hidden");
+    } else {
+        startBtn.classList.add("hidden");
+    }
+    
+    modeSection.classList.remove("hidden");
+    gameErrorP.textContent = "";
+    
+    socket.emit("getCategories");
+    
+    console.log("gameReset complete, showing room:", currentRoomCode);
+});
+
+socket.on("roleAssigned", function(data) {
+    categoryInfo.textContent = "Category: " + data.category;
+    myRole = data.role;
+    
+    if (data.role === "impostor") {
+        roleCard.className = "rounded-xl p-4 sm:p-6 text-center bg-red-600";
+        roleDisplay.textContent = "You are the IMPOSTOR";
+        wordDisplay.textContent = "";
+        roleHint.textContent = "You do not receive the secret word. Blend in!";
+        roleHint.classList.remove("hidden");
+    } else {
+        roleCard.className = "rounded-xl p-4 sm:p-6 text-center bg-green-600";
+        roleDisplay.textContent = "You are CREW";
+        wordDisplay.textContent = data.word;
+        roleHint.classList.add("hidden");
+    }
+});
+
+// Skip word handler (for host)
+function skipWord() {
+    if (!isHost) return;
+    socket.emit("skipWord");
+}
+
+// Handle word skipped event
+socket.on("wordSkipped", function(data) {
+    // Update the word display for crew members
+    if (myRole === "crew" && data.word) {
+        wordDisplay.textContent = data.word;
+        // Flash the word to indicate it changed
+        wordDisplay.classList.add("animate-pulse");
+        setTimeout(function() {
+            wordDisplay.classList.remove("animate-pulse");
+        }, 1000);
+    }
+    
+    // Show a notification
+    if (myRole === "impostor") {
+        roleHint.textContent = "The host skipped the word. A new word was chosen!";
     }
 });
